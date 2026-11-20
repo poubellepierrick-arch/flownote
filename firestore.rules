@@ -1,0 +1,274 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Filet de sécurité global (refus par défaut)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Primitives globales ---
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwnerUid(uid) {
+      return isVerifiedUser() && request.auth.uid == uid;
+    }
+
+    // --- Validation UserProfile ---
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['uid', 'theme', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'displayName', 'email', 'photoURL', 'theme', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.uid == request.auth.uid
+        && data.theme in ['light', 'dark']
+        && data.updatedAt is timestamp
+        && data.updatedAt == request.time
+        && (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 120))
+        && (!('email' in data) || (data.email is string && data.email.size() <= 200))
+        && (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 500));
+    }
+
+    // --- Validation Workspace ---
+    function isValidWorkspace(data, workspaceId) {
+      return data.keys().hasAll(['id', 'ownerId', 'name', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'ownerId', 'name', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && data.id == workspaceId
+        && isValidId(data.ownerId)
+        && data.ownerId == request.auth.uid
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 100
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && data.updatedAt == request.time;
+    }
+
+    // --- Validation WorkspacePage ---
+    function isValidBlockItem(block) {
+      return block is map
+        && block.keys().hasAll(['id', 'type', 'content'])
+        && block.keys().hasOnly(['id', 'type', 'content', 'checked', 'language', 'icon', 'isOpen', 'details', 'url', 'tableRows'])
+        && block.id is string && block.id.size() >= 1 && block.id.size() <= 128
+        && block.type in ['paragraph', 'heading1', 'heading2', 'heading3', 'todo', 'bullet', 'numbered', 'quote', 'callout', 'code', 'divider', 'toggle', 'table', 'bookmark']
+        && block.content is string && block.content.size() <= 20000
+        && (!('checked' in block) || block.checked is bool)
+        && (!('language' in block) || (block.language is string && block.language.size() <= 40))
+        && (!('icon' in block) || (block.icon is string && block.icon.size() <= 16))
+        && (!('isOpen' in block) || block.isOpen is bool)
+        && (!('details' in block) || (block.details is string && block.details.size() <= 10000))
+        && (!('url' in block) || (block.url is string && block.url.size() <= 2000))
+        && (!('tableRows' in block) || (block.tableRows is list && block.tableRows.size() <= 100 && (block.tableRows.size() == 0 || (block.tableRows[0] is map && block.tableRows[0].keys().hasOnly(['cells']) && block.tableRows[0].cells is list && block.tableRows[0].cells.size() <= 20))));
+    }
+
+    function isValidColumnItem(col) {
+      return col is map
+        && col.keys().hasAll(['id', 'name', 'type'])
+        && col.keys().hasOnly([
+          'id',
+          'name',
+          'type',
+          'options',
+          'relationTargetPageId',
+          'rollupRelationColId',
+          'rollupTargetColId',
+          'rollupFn',
+          'formulaExpression'
+        ])
+        && col.id is string && col.id.size() >= 1 && col.id.size() <= 64
+        && col.name is string && col.name.size() >= 1 && col.name.size() <= 80
+        && col.type in ['text', 'number', 'select', 'multi_select', 'checkbox', 'date', 'url', 'relation', 'rollup', 'formula']
+        && (!('options' in col) || (col.options is list && col.options.size() <= 100 && (col.options.size() == 0 || (col.options[0] is string && col.options[0].size() <= 120))))
+        && (!('relationTargetPageId' in col) || col.relationTargetPageId == null || (col.relationTargetPageId is string && col.relationTargetPageId.size() <= 128))
+        && (!('rollupRelationColId' in col) || (col.rollupRelationColId is string && col.rollupRelationColId.size() <= 64))
+        && (!('rollupTargetColId' in col) || (col.rollupTargetColId is string && col.rollupTargetColId.size() <= 64))
+        && (!('rollupFn' in col) || col.rollupFn in ['count', 'sum', 'avg', 'min', 'max', 'values', 'checked_count'])
+        && (!('formulaExpression' in col) || (col.formulaExpression is string && col.formulaExpression.size() <= 2000));
+    }
+
+    function isValidSortRule(rule) {
+      return rule is map
+        && rule.keys().hasAll(['colId', 'dir'])
+        && rule.keys().hasOnly(['colId', 'dir'])
+        && rule.colId is string && rule.colId.size() >= 1 && rule.colId.size() <= 64
+        && rule.dir in ['asc', 'desc'];
+    }
+
+    function isValidWorkspacePage(data, workspaceId, pageId) {
+      return data.keys().hasAll(['id', 'workspaceId', 'ownerId', 'title', 'type', 'isFavorite', 'isTrashed', 'order', 'source', 'blocks', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'workspaceId', 'ownerId', 'parentId', 'title', 'icon', 'type', 'isFavorite', 'isTrashed', 'order', 'source', 'blocks', 'columns', 'activeView', 'sortRules', 'columnWidths', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && data.id == pageId
+        && isValidId(data.workspaceId)
+        && data.workspaceId == workspaceId
+        && isValidId(data.ownerId)
+        && data.ownerId == request.auth.uid
+        && (!('parentId' in data) || data.parentId == null || (isValidId(data.parentId) && data.parentId != pageId))
+        && data.title is string && data.title.size() <= 200
+        && (!('icon' in data) || (data.icon is string && data.icon.size() <= 32))
+        && data.type in ['document', 'database']
+        && data.isFavorite is bool
+        && data.isTrashed is bool
+        && data.order is number
+        && data.source in ['native', 'notion_import']
+        && data.blocks is list && data.blocks.size() <= 400
+        && (data.blocks.size() == 0 || isValidBlockItem(data.blocks[0]))
+        && (!('columns' in data) || (data.columns is list && data.columns.size() <= 100 && (data.columns.size() == 0 || isValidColumnItem(data.columns[0]))))
+        && (!('activeView' in data) || data.activeView in ['table', 'kanban', 'list'])
+        && (!('sortRules' in data) || (data.sortRules is list && data.sortRules.size() <= 30 && (data.sortRules.size() == 0 || isValidSortRule(data.sortRules[0]))))
+        && (!('columnWidths' in data) || (data.columnWidths is map && data.columnWidths.keys().size() <= 100))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && data.updatedAt == request.time;
+    }
+
+    // --- Validation DatabaseRow ---
+    function isValidDatabaseRow(data, workspaceId, pageId, rowId) {
+      return data.keys().hasAll(['id', 'pageId', 'workspaceId', 'ownerId', 'order', 'cells', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'pageId', 'workspaceId', 'ownerId', 'order', 'cells', 'linkedPageId', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && data.id == rowId
+        && isValidId(data.pageId)
+        && data.pageId == pageId
+        && isValidId(data.workspaceId)
+        && data.workspaceId == workspaceId
+        && isValidId(data.ownerId)
+        && data.ownerId == request.auth.uid
+        && data.order is number
+        && data.cells is map
+        && data.cells.keys().size() <= 100
+        && (!('linkedPageId' in data) || data.linkedPageId == null || isValidId(data.linkedPageId))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && data.updatedAt == request.time;
+    }
+
+    // --- Match /users/{userId} (PII isolée au propriétaire uniquement) ---
+    match /users/{userId} {
+      allow get: if isValidId(userId) && isOwnerUid(userId);
+      allow list: if false;
+      allow create: if isValidId(userId)
+        && isOwnerUid(userId)
+        && isValidUserProfile(incoming());
+      allow update: if isValidId(userId)
+        && isOwnerUid(userId)
+        && isValidUserProfile(incoming())
+        && incoming().uid == existing().uid
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'email', 'photoURL', 'theme', 'updatedAt']);
+      allow delete: if isValidId(userId) && isOwnerUid(userId);
+    }
+
+    // --- Match /workspaces/{workspaceId} ---
+    match /workspaces/{workspaceId} {
+      allow get: if isValidId(workspaceId) && isVerifiedUser() && existing().ownerId == request.auth.uid;
+      allow list: if isVerifiedUser() && resource.data.ownerId == request.auth.uid;
+      allow create: if isValidId(workspaceId)
+        && isVerifiedUser()
+        && isValidWorkspace(incoming(), workspaceId)
+        && incoming().createdAt == request.time;
+      allow update: if isValidId(workspaceId)
+        && isVerifiedUser()
+        && isValidWorkspace(incoming(), workspaceId)
+        && existing().ownerId == request.auth.uid
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'updatedAt']);
+      allow delete: if isValidId(workspaceId) && isVerifiedUser() && existing().ownerId == request.auth.uid;
+
+      // --- Match /workspaces/{workspaceId}/pages/{pageId} ---
+      match /pages/{pageId} {
+        function isWorkspaceOwner() {
+          return exists(/databases/$(database)/documents/workspaces/$(workspaceId))
+            && get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerId == request.auth.uid;
+        }
+
+        function isWorkspaceOwnerAfter() {
+          return existsAfter(/databases/$(database)/documents/workspaces/$(workspaceId))
+            && getAfter(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerId == request.auth.uid;
+        }
+
+        allow get: if isValidId(workspaceId) && isValidId(pageId)
+          && isVerifiedUser()
+          && existing().ownerId == request.auth.uid
+          && isWorkspaceOwner();
+        allow list: if isVerifiedUser() && resource.data.ownerId == request.auth.uid;
+        allow create: if isValidId(workspaceId) && isValidId(pageId)
+          && isVerifiedUser()
+          && isValidWorkspacePage(incoming(), workspaceId, pageId)
+          && incoming().createdAt == request.time
+          && isWorkspaceOwnerAfter();
+        allow update: if isValidId(workspaceId) && isValidId(pageId)
+          && isVerifiedUser()
+          && isValidWorkspacePage(incoming(), workspaceId, pageId)
+          && existing().ownerId == request.auth.uid
+          && incoming().ownerId == existing().ownerId
+          && incoming().workspaceId == existing().workspaceId
+          && incoming().createdAt == existing().createdAt
+          && isWorkspaceOwner()
+          && (
+            // Action : modification contenu/propriétés document
+            incoming().diff(existing()).affectedKeys().hasOnly(['title', 'icon', 'parentId', 'blocks', 'columns', 'activeView', 'sortRules', 'columnWidths', 'order', 'updatedAt']) ||
+            // Action : favori ou corbeille
+            incoming().diff(existing()).affectedKeys().hasOnly(['isFavorite', 'isTrashed', 'updatedAt'])
+          );
+        allow delete: if isValidId(workspaceId) && isValidId(pageId)
+          && isVerifiedUser()
+          && existing().ownerId == request.auth.uid
+          && isWorkspaceOwner();
+
+        // --- Match /workspaces/{workspaceId}/pages/{pageId}/rows/{rowId} ---
+        match /rows/{rowId} {
+          function isPageOwner() {
+            return exists(/databases/$(database)/documents/workspaces/$(workspaceId)/pages/$(pageId))
+              && get(/databases/$(database)/documents/workspaces/$(workspaceId)/pages/$(pageId)).data.ownerId == request.auth.uid;
+          }
+
+          function isPageOwnerAfter() {
+            return existsAfter(/databases/$(database)/documents/workspaces/$(workspaceId)/pages/$(pageId))
+              && getAfter(/databases/$(database)/documents/workspaces/$(workspaceId)/pages/$(pageId)).data.ownerId == request.auth.uid;
+          }
+
+          allow get: if isValidId(workspaceId) && isValidId(pageId) && isValidId(rowId)
+            && isVerifiedUser()
+            && existing().ownerId == request.auth.uid
+            && isPageOwner();
+          allow list: if isVerifiedUser() && resource.data.ownerId == request.auth.uid;
+          allow create: if isValidId(workspaceId) && isValidId(pageId) && isValidId(rowId)
+            && isVerifiedUser()
+            && isValidDatabaseRow(incoming(), workspaceId, pageId, rowId)
+            && incoming().createdAt == request.time
+            && isPageOwnerAfter();
+          allow update: if isValidId(workspaceId) && isValidId(pageId) && isValidId(rowId)
+            && isVerifiedUser()
+            && isValidDatabaseRow(incoming(), workspaceId, pageId, rowId)
+            && existing().ownerId == request.auth.uid
+            && incoming().ownerId == existing().ownerId
+            && incoming().pageId == existing().pageId
+            && incoming().workspaceId == existing().workspaceId
+            && incoming().createdAt == existing().createdAt
+            && isPageOwner()
+            && incoming().diff(existing()).affectedKeys().hasOnly(['cells', 'order', 'linkedPageId', 'updatedAt']);
+          allow delete: if isValidId(workspaceId) && isValidId(pageId) && isValidId(rowId)
+            && isVerifiedUser()
+            && existing().ownerId == request.auth.uid
+            && isPageOwner();
+        }
+      }
+    }
+  }
+}

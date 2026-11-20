@@ -1,0 +1,6 @@
+{
+  "name": "FlowNote",
+  "description": "Espace de travail modulaire : pages, bases de données, importation Notion et synchronisation Firebase.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

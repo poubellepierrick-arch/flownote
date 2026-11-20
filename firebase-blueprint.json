@@ -1,0 +1,247 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Profil utilisateur et préférences d'affichage",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Identifiant Firebase Auth"
+        },
+        "displayName": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Nom affiché"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 200,
+          "description": "Adresse email"
+        },
+        "photoURL": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "URL avatar"
+        },
+        "theme": {
+          "type": "string",
+          "enum": ["light", "dark"],
+          "maxLength": 10,
+          "description": "Thème actif"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Horodatage serveur de mise à jour"
+        }
+      },
+      "required": ["uid", "theme", "updatedAt"]
+    },
+    "Workspace": {
+      "title": "Workspace",
+      "description": "Espace de travail personnel synchronisé",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "ownerId", "name", "createdAt", "updatedAt"]
+    },
+    "WorkspacePage": {
+      "title": "WorkspacePage",
+      "description": "Page document ou base de données dans l'espace de travail",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "workspaceId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "parentId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "icon": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "type": {
+          "type": "string",
+          "enum": ["document", "database"],
+          "maxLength": 20
+        },
+        "isFavorite": {
+          "type": "boolean"
+        },
+        "isTrashed": {
+          "type": "boolean"
+        },
+        "order": {
+          "type": "number"
+        },
+        "source": {
+          "type": "string",
+          "enum": ["native", "notion_import"],
+          "maxLength": 30
+        },
+        "blocks": {
+          "type": "array",
+          "description": "Liste bornée de blocs de contenu (max 400, incluant table et bookmark)"
+        },
+        "columns": {
+          "type": "array",
+          "description": "Colonnes de base de données (max 100, incluant multi_select, relation, rollup et formula)"
+        },
+        "activeView": {
+          "type": "string",
+          "enum": ["table", "kanban", "list"],
+          "maxLength": 20
+        },
+        "sortRules": {
+          "type": "array",
+          "description": "Règles de tri par priorité des colonnes (max 30)"
+        },
+        "columnWidths": {
+          "type": "object",
+          "description": "Largeurs personnalisées des colonnes en pixels (max 100)"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "workspaceId",
+        "ownerId",
+        "title",
+        "type",
+        "isFavorite",
+        "isTrashed",
+        "order",
+        "source",
+        "blocks",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "DatabaseRow": {
+      "title": "DatabaseRow",
+      "description": "Ligne d'une base de données",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "pageId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "workspaceId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "order": {
+          "type": "number"
+        },
+        "cells": {
+          "type": "object",
+          "description": "Valeurs indexées par identifiant de colonne (max 100 propriétés)"
+        },
+        "linkedPageId": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "Identifiant optionnel de la fiche détaillée liée à cette ligne"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "pageId",
+        "workspaceId",
+        "ownerId",
+        "order",
+        "cells",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Profil privé de l'utilisateur authentifié"
+    },
+    "/workspaces/{workspaceId}": {
+      "schema": { "$ref": "#/entities/Workspace" },
+      "description": "Espace de travail appartenant à un utilisateur"
+    },
+    "/workspaces/{workspaceId}/pages/{pageId}": {
+      "schema": { "$ref": "#/entities/WorkspacePage" },
+      "description": "Pages et bases de données d'un espace de travail"
+    },
+    "/workspaces/{workspaceId}/pages/{pageId}/rows/{rowId}": {
+      "schema": { "$ref": "#/entities/DatabaseRow" },
+      "description": "Lignes des bases de données"
+    }
+  }
+}
